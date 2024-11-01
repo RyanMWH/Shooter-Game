@@ -1,0 +1,448 @@
+import pygame, sys, time, random
+
+pygame.init()
+
+
+
+#Ideas to add to the game, tanks, grenades, little shooters, 
+#reskin the characters, make the screen expandable.
+        
+
+#Resources
+#Clocks to tick(count)
+clock = pygame.time.Clock()
+#Screen Display
+window_width = 1920/2
+window_height = 1080/2
+screen = pygame.display.set_mode((window_width, window_height),pygame.RESIZABLE)
+background = pygame.image.load("resources/background/bg_img.jpeg")
+background = pygame.transform.scale(background, (window_width, window_height))
+gameTitle = pygame.image.load("resources/background/title/rooky_road_title.png")
+gameTitle = pygame.transform.scale(gameTitle, (168, 168))
+mMenuBackground = pygame.image.load("resources/background/MMenu.jpeg")
+mMenuBackground = pygame.transform.scale(mMenuBackground, (window_width, window_height))
+button = pygame.image.load("resources/background/buttons/button1.png")
+button = pygame.transform.scale(button, (192,48))
+buttonFont = pygame.font.SysFont("comicsansms", 28, 1, 1)
+font = pygame.font.SysFont("helvetica", 30, 1, 1)
+fontSmall = pygame.font.SysFont("helvetica", 16, 1, 1)
+pygame.display.set_caption("Building Menus")
+
+
+#Sound Resources
+bulletSound = pygame.mixer.Sound("resources/sounds/Bulletsound.mp3")
+hitSound = pygame.mixer.Sound("resources/sounds/Hit.mp3")
+themeMusic = pygame.mixer.music.load("resources/sounds/music.mp3")
+pygame.mixer.music.play(-1)
+pygame.mixer.music.set_volume(0.6)
+
+#Soldier Walk Frames
+walkRight = [pygame.image.load(f'resources/sprite/soldier/R{i}.png') for i in range (1, 10)]
+walkLeft = [pygame.image.load(f'resources/sprite/soldier/L{i}.png') for i in range (1, 10)]
+charStill = pygame.image.load('resources/sprite/soldier/standing.png')
+
+#Enemy Walk Frames
+enemyRight = [pygame.image.load(f'resources/sprite/enemy/R{i}.png') for i in range (1, 10)]
+enemyLeft = [pygame.image.load(f'resources/sprite/enemy/L{i}.png') for i in range (1, 10)]
+
+
+
+#Classes
+
+#Player Class
+class Player():
+    def __init__(self, xpos, ypos, objectwidth, objectheight):
+        #Creating moving object
+        #Position
+        self.xpos = xpos
+        self.ypos = ypos
+        #Size
+        self.objectwidth = objectwidth
+        self.objectheight = objectheight
+        #Directional
+        self.isLeft = False
+        self.isRight = False
+        self.vel = 5
+        self.walkCnt = 0
+        self.standing = True
+
+        #Currently has no use, but hitbox for player
+        self.hitbox = (self.xpos, self.ypos, self.objectwidth, self.objectheight)
+        self.hit = pygame.Rect(self.hitbox)
+
+    def draw(self, screen):
+        #Tick for animations
+        if self.walkCnt + 1 >= 18:
+            self.walkCnt = 0
+        
+        #Soldier Animations
+        if not self.standing:
+            if self.isLeft:
+                screen.blit(walkLeft[self.walkCnt//2], (self.xpos, self.ypos))
+                self.walkCnt += 1
+            elif self.isRight:
+                screen.blit(walkRight[self.walkCnt//2], (self.xpos, self.ypos))
+                self.walkCnt += 1
+        else:
+            if self.isRight:
+                screen.blit(walkRight[0], (self.xpos, self.ypos))
+            else:
+                screen.blit(walkLeft[0], (self.xpos, self.ypos))
+        #Drawing and updating hitboxes
+        self.hitbox = (self.xpos, self.ypos, self.objectwidth, self.objectheight)
+        self.hit = pygame.Rect(self.hitbox)
+
+#Projectile Class
+class Projectile():
+    def __init__(self, xpos, ypos, radius, color, direction):
+        #Creating moving object
+        #Position
+        self.xpos = xpos
+        self.ypos = ypos
+        #Size
+        self.radius = radius
+        self.color = color
+        #Direction
+        self.direction = direction
+        self.vel = 8 * direction
+        #Hitbox
+        self.hit = pygame.Rect(self.xpos, self.ypos, self.radius, self.radius)
+
+    
+    def draw(self, screen):
+        #Drawing bullet and updating hitbox
+        pygame.draw.circle(screen, self.color, (self.xpos, self.ypos), self.radius)
+        self.hit = pygame.Rect(self.xpos, self.ypos, self.radius, self.radius)
+        
+#Enemy Class
+class Enemy():
+
+
+
+    def __init__(self, xpos, ypos, objectheight, objectwidth, end):
+        #Creating moving object
+        #Position
+        self.xpos = xpos
+        self.ypos = ypos
+        self.path = [xpos, end]
+        #Size
+        self.objectwidth = objectwidth
+        self.objectheight = objectheight
+        #Directional
+        self.isLeft = False
+        self.isRight = False
+        self.vel = 1
+        self.walkCnt = 0
+
+        #Hitbox
+        self.hitbox = (self.xpos + 20, self.ypos + 15, self.objectwidth - 40, self.objectheight - 15)
+        self.hit = pygame.Rect(self.hitbox)
+    
+    def draw(self, screen):
+        self.movement()
+        #Tick for animations
+        if self.walkCnt + 1 >= 18:
+            self.walkCnt = 0
+        
+        #Enemy Animations
+        if self.vel > 0:
+            screen.blit(enemyRight[self.walkCnt//2], (self.xpos, self.ypos))
+            self.walkCnt += 1
+        else:
+            screen.blit(enemyLeft[self.walkCnt//2], (self.xpos, self.ypos))
+            self.walkCnt += 1
+        #Updating hit box and hitting.
+        self.hitbox = (self.xpos + 20, self.ypos + 15, self.objectwidth - 40, self.objectheight - 15)
+        self.hit = pygame.Rect(self.hitbox)
+
+    def movement(self):
+        #Continually moves enemy
+        if self.xpos < self.path[1]:
+            self.xpos += self.vel
+
+
+
+
+#Errors
+#Use tick to stall bullets instead of using the counter on line 201. This will stop it from sometimes not 
+#being able to shoot. Seems to have fixed the issue so far.
+#
+
+
+
+def play():
+    global keepHealth, soldierHealth, score, enemies, enemy, bullet, bullets, soldier, clock, window_height, window_width, background, screen
+    
+    #Init Player
+    soldier = Player(415, 395, 64, 64)
+    
+    #Enemy spawning holders and data
+    lanes = [415, 385, 355]
+    enemies = []
+    enemiesDefeated = 0
+    enemySoldierIteration = 0
+    randomEnemyTiming = 0
+    
+    #Bullet holders and data
+    bullets = []
+    bulletTimerStart = 0
+    bulletTimer = -1
+
+    #Start Tick for Score
+    startTick = time.time()
+
+    #Healths
+    soldierHealth = 100
+    keepHealth = 100
+
+    #Game Loop
+    drop = False
+    while not drop:
+
+        #Checks for exit
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                drop = True
+
+        #Score
+        score = ((time.time() - startTick)//.01) + (enemiesDefeated * 20)
+
+
+        #Enemy Spawn data
+        randomLane = random.randint(0,2)
+        #Little Soldier Spawn Iterator
+
+        if enemySoldierIteration <= 7:
+            enemySoldierIteration = (score//2500) + 1
+        else:
+            enemySoldierIteration = 8
+            
+        if score > 5000:
+            randomEnemyTiming = random.randint(0,50)
+
+        #Enemy Holder
+        for enemy in enemies:
+            if enemy.xpos < window_width and enemy.xpos > -50:
+                enemy.xpos += enemy.vel
+            elif enemy.xpos > window_width:
+                keepHealth -= 10
+                enemies.pop(enemies.index(enemy))
+        #Enemy Spawning
+        #This causes issues where the enemy cannot detect the collision FIXED by using double for loop in bullet loop
+        if (len(enemies) < enemySoldierIteration) and randomEnemyTiming == 0:
+            enemies.append(Enemy(-50, lanes[randomLane], 64, 64, (window_width + 10)))
+    
+        #Bullet Timer
+        differentialScoreLogic = 3 - score/12500
+        if differentialScoreLogic <= 0.75:
+            differentialScoreLogic = 0.75
+        if bulletTimerStart != 0:
+            bulletTimer = time.time() - bulletTimerStart
+            if bulletTimer >= differentialScoreLogic:
+                bulletTimer = -1
+                bulletTimerStart = 0
+
+        
+        #Bullet Holder
+        for bullet in bullets:
+            #Add for loop to iterator through enemies as well
+            for enemy in enemies:
+            #Hitbox collision
+                if bullet.hit.colliderect(enemy.hit):
+                    hitSound.play()
+                    enemiesDefeated += 1
+                    bullets.pop(bullets.index(bullet))    
+                    enemies.pop(enemies.index(enemy))
+            #Moves bullet if it has not gone off screen
+            if bullet.xpos < window_width and bullet.xpos > 0:
+                bullet.xpos += bullet.vel
+            #Deletes bullet if it moves off screen
+            else:
+                bullets.pop(bullets.index(bullet))
+
+        #Key inputs
+        KEY = pygame.key.get_pressed()
+
+        #Shoots bullets
+        if (KEY[pygame.K_x]) and bulletTimer == -1:
+            bulletTimerStart = time.time()
+            if soldier.isRight:
+                direction = 1
+            else:
+                direction = -1
+
+            if len(bullets) < 5:
+                bulletSound.play()
+                bullets.append(Projectile((soldier.xpos + soldier.objectwidth//2), (soldier.ypos + soldier.objectheight//2), 6, "black", direction))
+        #Move up
+        if (KEY[pygame.K_UP] or KEY[pygame.K_w]) and soldier.ypos > 345:
+            soldier.ypos -= soldier.vel
+            if KEY[pygame.K_LSHIFT] or KEY[pygame.K_RSHIFT]:
+                soldier.ypos -= 3
+        #Move down
+        elif (KEY[pygame.K_DOWN] or KEY[pygame.K_s]) and soldier.ypos < 445:
+            soldier.ypos += soldier.vel
+            if KEY[pygame.K_LSHIFT] or KEY[pygame.K_RSHIFT]:
+                soldier.ypos += 3
+        #Move left
+        if (KEY[pygame.K_LEFT] or KEY[pygame.K_a]) and soldier.xpos > 50:
+            soldier.xpos -= soldier.vel
+            soldier.isLeft = True
+            soldier.isRight = False
+            soldier.standing = False
+            if KEY[pygame.K_LSHIFT] or KEY[pygame.K_RSHIFT]:
+                soldier.xpos -= 3
+        #Move right
+        elif (KEY[pygame.K_RIGHT] or KEY[pygame.K_d]) and soldier.xpos < window_width - soldier.objectwidth:
+            soldier.xpos += soldier.vel
+            soldier.isLeft = False
+            soldier.isRight = True
+            soldier.standing = False
+            if KEY[pygame.K_LSHIFT] or KEY[pygame.K_RSHIFT]:
+                soldier.xpos += 3
+        
+        #Checks if Player is standing and faces him the last direction
+        else:
+            soldier.standing = True
+            soldier.walkCnt = 0
+
+        
+        #Wipes old objects/characters & draws in new
+        if keepHealth > 0:
+            DrawInGame()
+        elif keepHealth == 0:
+            DrawInEMenu(score)
+        
+
+def DrawInValues():
+    drawScore = font.render("Score: " + str(score), 0, "black")
+    screen.blit(drawScore, (8, 0))
+    drawKeepHealth = fontSmall.render("Keep Health", 0, "black")
+    screen.blit(drawKeepHealth, (window_width/2 - 64, 5))
+    pygame.draw.rect(screen, "gray", (window_width/2 - 77.5, 30, 100, 10))
+    pygame.draw.rect(screen, "green", (window_width/2 - 77.5, 30, (keepHealth * 1), 10))
+
+#Draws Everything in Game Loop
+def DrawInGame():
+    #Draws background
+    screen.blit(background, (0, 0))
+    #Draws scores and healths over background
+    DrawInValues()
+    #Drawing moving objects
+    #Draws in multiple enemies
+    for enemy in enemies:
+        enemy.draw(screen)
+    #Draw in tanks
+
+    #Draw in grenades
+
+    #Draws in multiple bullets
+    for bullet in bullets:
+        bullet.draw(screen)
+    soldier.draw(screen)
+
+    #Frame Rate
+    clock.tick(30)
+    #Updates screen continually
+    pygame.display.flip()
+
+def DrawInMMenu(menu):
+    while menu:
+        #Layer 1
+        screen.blit(mMenuBackground, (0,0))
+        #Title
+        screen.blit(gameTitle, (window_width/2 - 80, 8))
+
+        #Buttons and Text
+        #Start Button
+        screen.blit(button,((window_width / 2) - 96, 150))
+        buttonStart = buttonFont.render("START", 1, "black")
+        screen.blit(buttonStart, (window_width/2 - 46, 155))
+        
+        #Options Button
+        screen.blit(button,((window_width / 2) - 96, 150 + 48 + 32))
+        buttonOption = buttonFont.render("OPTIONS", 1, "black")
+        screen.blit(buttonOption, (window_width/2 - 68, 155 + 48 + 32))
+
+        #Exit Button
+        screen.blit(button,((window_width / 2) - 96, 150 + 96 + 64))
+        buttonExit = buttonFont.render("EXIT", 1, "black")
+        screen.blit(buttonExit, (window_width/2 - 35, 155 + 96 + 64))
+
+        #Event loop looking for button clicks
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouseXPos, mouseYPos = pygame.mouse.get_pos()
+
+                #Checks if mouse is on start button
+                if (window_width / 2) - 96 <= mouseXPos <= (window_width / 2) - 96 + 192 and 150 <= mouseYPos <= 198:
+                    menu = False
+                    play()
+
+                #Checks if mouse is on exit button
+                elif (window_width / 2) - 96 <= mouseXPos <= (window_width / 2) - 96 + 192 and 150 + 96 + 48 <= mouseYPos <= 198 + 96 + 48:
+                    pygame.quit()
+                    sys.exit()
+
+        pygame.display.flip()
+
+
+def DrawInEMenu(score):
+    scoreMenu = True
+    while scoreMenu:
+        #Layer 1
+        screen.fill("black")
+        DrawInScoreOnly(score, (window_width / 2) - 82, 150)
+
+        #Start Button
+        screen.blit(button,((window_width / 2) - 96, 150 + 64))
+        buttonStart = buttonFont.render("START", 1, "black")
+        screen.blit(buttonStart, (window_width/2 - 46, 155 + 64))
+
+        #Exit Button
+        screen.blit(button,((window_width / 2) - 96, 150 + 96 + 64))
+        buttonExit = buttonFont.render("EXIT", 1, "black")
+        screen.blit(buttonExit, (window_width/2 - 35, 155 + 96 + 64))
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouseXPos, mouseYPos = pygame.mouse.get_pos()
+
+                #Checks if mouse is on start button
+                if (window_width / 2) - 96 <= mouseXPos <= (window_width / 2) - 96 + 192 and 150 + 64 <= mouseYPos <= 198 + 64:
+                    scoreMenu = False
+                    play()
+
+                #Checks if mouse is on exit button
+                elif (window_width / 2) - 96 <= mouseXPos <= (window_width / 2) - 96 + 192 and 150 + 96 + 48 <= mouseYPos <= 198 + 96 + 48:
+                    pygame.quit()
+                    sys.exit()
+
+
+        pygame.display.flip()
+
+    #Score
+    
+    #Play Again/Restart
+
+    #Quit
+
+def DrawInScoreOnly(score, x, y):
+    drawScore = font.render("Score: " + str(score), 0, "white")
+    screen.blit(drawScore, (x, y))
+
+#Runs main function of code
+def main():
+    menu = True
+    DrawInMMenu(menu)
+
+
+main()
